@@ -121,6 +121,43 @@
         }
         .session-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+        /* Nested Project & Chat Styling */
+        .project-group {
+            margin-bottom: 12px;
+        }
+        .project-header {
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 10px; font-weight: 500; font-size: 11px;
+            color: var(--text); background: rgba(255,255,255,0.02);
+            border-radius: var(--radius); margin-bottom: 2px;
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .project-chats {
+            padding-left: 10px;
+            display: flex; flex-direction: column; gap: 1px;
+        }
+        .project-chat-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 6px 8px; border-radius: var(--radius);
+            cursor: pointer; color: var(--text-muted);
+            font-size: 12.5px; transition: all 0.1s;
+        }
+        .project-chat-item:hover {
+            background: var(--bg-hover); color: var(--text);
+        }
+        .project-chat-item.active {
+            background: var(--accent-dim); color: var(--text);
+            font-weight: 500;
+        }
+        .project-chat-dot {
+            width: 4px; height: 4px; border-radius: 50%;
+            background: var(--text-dim);
+        }
+        .project-chat-item.active .project-chat-dot {
+            background: var(--accent);
+            box-shadow: 0 0 0 2px rgba(59,130,246,0.3);
+        }
+
         .no-sessions {
             padding: 20px 12px; text-align: center;
             color: var(--text-dim); font-size: 12px; line-height: 1.8;
@@ -539,13 +576,66 @@
             sessionList.innerHTML = `<div class="no-sessions"><span class="no-sessions-icon">💬</span>No sessions found.<br>Open Antigravity in Chrome<br>with <code style="font-size:10px;color:#525252">--remote-debugging-port=9000</code></div>`;
             return;
         }
-        sessionList.innerHTML = sessions.map(s => `
-            <div class="session-item ${s.id === currentId ? 'active' : ''} ${s.active ? 'live' : ''}"
-                 onclick="pick('${s.id}')">
-                <div class="session-dot"></div>
-                <span class="session-name">${esc(s.title || 'Untitled')}</span>
-            </div>
-        `).join('');
+
+        let html = '';
+        sessions.forEach(s => {
+            // Main workbench session tab
+            html += `
+                <div class="session-item ${s.id === currentId ? 'active' : ''} ${s.active ? 'live' : ''}"
+                     onclick="pick('${s.id}')">
+                    <div class="session-dot"></div>
+                    <span class="session-name">${esc(s.title || 'Untitled')}</span>
+                </div>
+            `;
+
+            // Nested projects and chats
+            if (s.projects && s.projects.length > 0) {
+                s.projects.forEach(p => {
+                    html += `
+                        <div class="project-group">
+                            <div class="project-header">
+                                <span>📁</span>
+                                <span>${esc(p.project)}</span>
+                            </div>
+                            <div class="project-chats">
+                                ${p.chats.map(chat => `
+                                    <div class="project-chat-item ${chat.active ? 'active' : ''}" 
+                                         onclick="switchToChat('${s.id}', '${esc(chat.title)}')">
+                                        <div class="project-chat-dot"></div>
+                                        <span class="session-name">${esc(chat.title)}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+        });
+        sessionList.innerHTML = html;
+    }
+
+    // ── Switch Headless Chat ─────────────────────────
+    async function switchToChat(sessionId, chatTitle) {
+        // First switch the view context
+        currentId = sessionId;
+        const s = sessions.find(x => x.id === sessionId);
+        headerCrumb.textContent = s ? (s.window ? s.window.split(' ')[0] + ' / ' : '') : '';
+        headerTitle.textContent = chatTitle;
+        livePill.classList.toggle('show', !!s?.active);
+        
+        chatContent.innerHTML = `<div class="state-wrap"><div class="state-icon" style="animation:spin 1s linear infinite;display:inline-block">⏳</div><div class="state-title">Switching to chat...</div></div>`;
+
+        try {
+            const res = await fetch(`/switch/${sessionId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chatTitle: chatTitle })
+            });
+            if (res.ok) {
+                await refreshContent(sessionId);
+            }
+        } catch(e) {}
+        renderSidebar();
     }
 
     // ── Pick session ────────────────────────────────

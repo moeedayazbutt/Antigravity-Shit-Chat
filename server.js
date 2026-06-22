@@ -93,19 +93,39 @@ async function connectCDP(url) {
 
 async function extractMetadata(cdp) {
     const SCRIPT = `(() => {
-        // Support both old #cascade and new Antigravity #root structure
         const root = document.getElementById('cascade') || document.getElementById('root');
         if (!root) return { found: false };
 
-        // Try to get the conversation title from the page title or header
         let chatTitle = document.title || 'Agent';
-        // Strip common suffixes
         chatTitle = chatTitle.replace(/\\s*[-|]\\s*Antigravity.*$/i, '').trim() || 'Agent';
+
+        // Extract sidebar structure (Projects and their nested chats)
+        const sidebarProjects = [];
+        try {
+            const headers = document.getElementsByClassName('text-sm font-medium truncate m-0');
+            for (let i = 0; i < headers.length; i++) {
+                const h = headers[i];
+                const parent = h.closest('.flex-col');
+                const chatItems = parent ? Array.from(parent.querySelectorAll('.select-none.cursor-pointer')).map(el => {
+                    const span = el.querySelector('span');
+                    return {
+                        title: span ? span.innerText : el.innerText,
+                        active: el.className.includes('bg-sidebar-muted') || el.className.includes('bg-sidebar-secondary') || el.className.includes('bg-muted')
+                    };
+                }).filter(x => x.title) : [];
+
+                sidebarProjects.push({
+                    project: h.innerText,
+                    chats: chatItems
+                });
+            }
+        } catch(e) {}
 
         return {
             found: true,
             chatTitle: chatTitle,
-            isActive: document.hasFocus()
+            isActive: document.hasFocus(),
+            sidebarProjects: sidebarProjects
         };
     })()`;
 
@@ -131,11 +151,38 @@ async function extractMetadata(cdp) {
     const fallbackCtx = cdp.contexts[0];
     if (fallbackCtx) {
         try {
-            const res = await cdp.call("Runtime.evaluate", { expression: '({found:true, chatTitle: document.title || "Agent", isActive: document.hasFocus()})', returnByValue: true, contextId: fallbackCtx.id });
+            const res = await cdp.call("Runtime.evaluate", { expression: '({found:true, chatTitle: document.title || "Agent", isActive: document.hasFocus(), sidebarProjects: []})', returnByValue: true, contextId: fallbackCtx.id });
             if (res.result?.value) return { ...res.result.value, contextId: fallbackCtx.id };
         } catch(e) {}
     }
     return null;
+}
+
+async function switchConversation(cdp, chatTitle) {
+    const SCRIPT = `(() => {
+        const items = Array.from(document.getElementsByTagName('span'));
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].innerText.trim() === "${chatTitle.replace(/"/g, '\\"')}") {
+                let p = items[i];
+                while (p && p.tagName !== 'BODY') {
+                    if (p.className.includes('cursor-pointer')) {
+                        p.click();
+                        return { success: true };
+                    }
+                    p = p.parentElement;
+                }
+            }
+        }
+        return { success: false, reason: 'Element not found or not clickable' };
+    })()`;
+    try {
+        const contextId = cdp.rootContextId || (cdp.contexts[0]?.id);
+        if (!contextId) return { success: false, reason: 'No context id' };
+        const res = await cdp.call("Runtime.evaluate", { expression: SCRIPT, returnByValue: true, contextId });
+        return res.result?.value || { success: false };
+    } catch(e) {
+        return { success: false, reason: e.message };
+    }
 }
 
 async function captureCSS(cdp) {
@@ -346,7 +393,8 @@ function broadcastCascadeList() {
         id: c.id,
         title: c.metadata.chatTitle,
         window: c.metadata.windowTitle,
-        active: c.metadata.isActive
+        active: c.metadata.isActive,
+        projects: c.metadata.sidebarProjects || []
     }));
     broadcast({ type: 'cascade_list', cascades: list });
 }
@@ -366,8 +414,31 @@ async function main() {
         res.json(Array.from(cascades.values()).map(c => ({
             id: c.id,
             title: c.metadata.chatTitle,
-            active: c.metadata.isActive
+            active: c.metadata.isActive,
+            projects: c.metadata.sidebarProjects || []
         })));
+    });
+
+    app.post('/switch/:id', async (req, res) => {
+        const c = cascades.get(req.params.id);
+        if (!c) return res.status(404).json({ error: 'Cascade not found' });
+        const { chatTitle } = req.body;
+        if (!chatTitle) return res.status(400).json({ error: 'Missing chatTitle' });
+
+        const result = await switchConversation(c.cdp, chatTitle);
+        if (result.success) {
+            // Give it a brief moment to update metadata
+            setTimeout(async () => {
+                const meta = await extractMetadata(c.cdp);
+                if (meta) {
+                    c.metadata = { ...c.metadata, ...meta };
+                    broadcastCascadeList();
+                }
+            }, 300);
+            res.json({ success: true });
+        } else {
+            res.status(500).json(result);
+        }
     });
 
     app.get('/snapshot/:id', (req, res) => {
