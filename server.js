@@ -427,13 +427,19 @@ async function main() {
 
         const result = await switchConversation(c.cdp, chatTitle);
         if (result.success) {
-            // Give it a brief moment to update metadata
+            // Give it a brief moment to update then capture snapshot immediately
             setTimeout(async () => {
                 const meta = await extractMetadata(c.cdp);
                 if (meta) {
                     c.metadata = { ...c.metadata, ...meta };
-                    broadcastCascadeList();
                 }
+                const snap = await captureHTML(c.cdp);
+                if (snap) {
+                    c.snapshot = snap;
+                    c.snapshotHash = hashString(snap.html);
+                    broadcast({ type: 'snapshot_update', cascadeId: c.id });
+                }
+                broadcastCascadeList();
             }, 300);
             res.json({ success: true });
         } else {
