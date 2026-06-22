@@ -239,10 +239,14 @@ async function discover() {
     await Promise.all(PORTS.map(async (port) => {
         const list = await getJson(`http://127.0.0.1:${port}/json/list`);
         const workbenches = list.filter(t => 
-            t.url?.includes('workbench.html') || 
-            t.title?.includes('workbench') ||
-            (t.url?.includes('127.0.0.1') && t.url?.includes('/c/') && t.type === 'page') ||
-            (t.url?.includes('localhost') && t.url?.includes('/c/') && t.type === 'page')
+            t.type === 'page' && (
+                t.url?.includes('workbench.html') || 
+                t.title?.toLowerCase().includes('workbench') ||
+                t.title?.toLowerCase().includes('antigravity') ||
+                t.url?.includes('/c/') ||
+                t.url?.includes('127.0.0.1') ||
+                t.url?.includes('localhost')
+            )
         );
         workbenches.forEach(t => allTargets.push({ ...t, port }));
     }));
