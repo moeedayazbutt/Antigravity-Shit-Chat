@@ -180,11 +180,12 @@
         #chatScroller {
             flex: 1; overflow-y: auto; overflow-x: hidden;
             position: relative;
+            -webkit-overflow-scrolling: touch;
         }
         #chatScroller::-webkit-scrollbar { width: 3px; }
         #chatScroller::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-        #chatContent { min-height: 100%; }
+        #chatContent { min-height: 100%; position: relative; z-index: 1; }
 
         /* Empty / loading */
         .state-wrap {
@@ -204,6 +205,7 @@
             color: var(--text) !important;
             background: transparent !important;
             font-family: 'Inter', sans-serif !important;
+            pointer-events: auto !important;
         }
         /* Force ALL text inside to be light */
         #ag-mirror * { color: inherit; }
@@ -220,10 +222,19 @@
             font-size: 12px !important; border-radius: 6px !important;
         }
         /* Links */
-        #ag-mirror a { color: #60a5fa !important; text-decoration: none; }
+        #ag-mirror a { color: #60a5fa !important; text-decoration: none; pointer-events: auto !important; }
         #ag-mirror a:hover { text-decoration: underline; }
         /* Override any fixed heights that break layout */
         #ag-mirror > div { height: auto !important; min-height: 0 !important; }
+        /* Ignore pointers on absolute/fixed background covers or layout wrappers injected by the app */
+        #ag-mirror [class*="fixed"], #ag-mirror [class*="absolute"] {
+            pointer-events: none !important;
+        }
+        /* Restore pointer events specifically for interactable content elements inside absolute positioning if any */
+        #ag-mirror [class*="fixed"] button, #ag-mirror [class*="absolute"] button,
+        #ag-mirror [class*="fixed"] a, #ag-mirror [class*="absolute"] a {
+            pointer-events: auto !important;
+        }
         /* Scroll bars inside */
         #ag-mirror *::-webkit-scrollbar { width: 3px; height: 3px; }
         #ag-mirror *::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
