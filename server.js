@@ -105,7 +105,16 @@ async function extractMetadata(cdp) {
             const headers = document.getElementsByClassName('text-sm font-medium truncate m-0');
             for (let i = 0; i < headers.length; i++) {
                 const h = headers[i];
-                const parent = h.closest('.flex-col');
+                
+                // Find closest wrapping section parent node reliably
+                let parent = h.parentElement;
+                while (parent && parent.tagName !== 'BODY') {
+                    if (parent.className.includes('flex-col') && parent.className.includes('group/section')) {
+                        break;
+                    }
+                    parent = parent.parentElement;
+                }
+                
                 const chatItems = parent ? Array.from(parent.querySelectorAll('.select-none.cursor-pointer')).map(el => {
                     const span = el.querySelector('span');
                     // Check if chat has a spinner or is currently active/running
