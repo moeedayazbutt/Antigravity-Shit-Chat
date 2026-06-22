@@ -343,7 +343,8 @@ async function discover() {
                     metadata: {
                         windowTitle: target.title,
                         chatTitle: meta.chatTitle,
-                        isActive: meta.isActive
+                        isActive: meta.isActive,
+                        sidebarProjects: meta.sidebarProjects || []
                     },
                     snapshot: null,
                     css: await captureCSS(cdp), //only on init bc its huge
@@ -377,6 +378,18 @@ async function updateSnapshots() {
     // Parallel updates
     await Promise.all(Array.from(cascades.values()).map(async (c) => {
         try {
+            // Also refresh projects/conversations metadata in sync loop (every 500ms)
+            const meta = await extractMetadata(c.cdp);
+            if (meta) {
+                const oldProjectsStr = JSON.stringify(c.metadata.sidebarProjects || []);
+                const newProjectsStr = JSON.stringify(meta.sidebarProjects || []);
+                c.metadata = { ...c.metadata, ...meta };
+                
+                if (oldProjectsStr !== newProjectsStr) {
+                    broadcastCascadeList();
+                }
+            }
+
             const snap = await captureHTML(c.cdp); // Only capture HTML
             if (snap) {
                 const hash = hashString(snap.html);
