@@ -578,6 +578,8 @@
         }
 
         let html = '';
+        const renderedProjects = new Set();
+
         sessions.forEach(s => {
             // Main workbench session tab
             html += `
@@ -591,6 +593,10 @@
             // Nested projects and chats
             if (s.projects && s.projects.length > 0) {
                 s.projects.forEach(p => {
+                    // Prevent duplicate project blocks
+                    if (renderedProjects.has(p.project)) return;
+                    renderedProjects.add(p.project);
+
                     html += `
                         <div class="project-group">
                             <div class="project-header">
@@ -598,13 +604,19 @@
                                 <span>${esc(p.project)}</span>
                             </div>
                             <div class="project-chats">
-                                ${p.chats.map(chat => `
-                                    <div class="project-chat-item ${chat.active ? 'active' : ''}" 
-                                         onclick="switchToChat('${s.id}', '${esc(chat.title)}')">
-                                        <div class="project-chat-dot"></div>
-                                        <span class="session-name">${esc(chat.title)}</span>
-                                    </div>
-                                `).join('')}
+                                ${p.chats.map(chat => {
+                                    const isSpinner = chat.inProgress;
+                                    return `
+                                        <div class="project-chat-item ${chat.active ? 'active' : ''}" 
+                                             onclick="switchToChat('${s.id}', '${esc(chat.title)}')">
+                                            ${isSpinner ? 
+                                                `<div style="animation:spin 1s linear infinite; font-size: 10px; flex-shrink: 0;">⏳</div>` :
+                                                `<div class="project-chat-dot"></div>`
+                                            }
+                                            <span class="session-name">${esc(chat.title)}</span>
+                                        </div>
+                                    `;
+                                }).join('')}
                             </div>
                         </div>
                     `;
@@ -632,7 +644,12 @@
                 body: JSON.stringify({ chatTitle: chatTitle })
             });
             if (res.ok) {
+                // Instantly force-pull the snapshot three times in quick succession 
+                // to handle any transition delays in the target Chrome page.
                 await refreshContent(sessionId);
+                setTimeout(() => refreshContent(sessionId), 100);
+                setTimeout(() => refreshContent(sessionId), 300);
+                setTimeout(() => refreshContent(sessionId), 600);
             }
         } catch(e) {}
         renderSidebar();

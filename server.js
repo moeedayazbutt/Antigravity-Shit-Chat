@@ -11,7 +11,7 @@ const __dirname = dirname(__filename);
 
 const PORTS = [9000, 9001, 9002, 9003];
 const DISCOVERY_INTERVAL = 10000;
-const POLL_INTERVAL = 3000;
+const POLL_INTERVAL = 500; // Fast sync interval (0.5 seconds)
 
 // Application State
 let cascades = new Map(); // Map<cascadeId, { id, cdp: { ws, contexts, rootContextId }, metadata, snapshot, snapshotHash }>
@@ -108,16 +108,26 @@ async function extractMetadata(cdp) {
                 const parent = h.closest('.flex-col');
                 const chatItems = parent ? Array.from(parent.querySelectorAll('.select-none.cursor-pointer')).map(el => {
                     const span = el.querySelector('span');
+                    // Check if chat has a spinner or is currently active/running
+                    const hasSpinner = !!el.querySelector('.animate-spin, svg[class*="spin"], [class*="spinner"]');
+                    const text = span ? span.innerText : el.innerText;
+                    // Clean title from duration suffixes e.g., "\n5m"
+                    const cleanTitle = text.split('\n')[0].trim();
+                    
                     return {
-                        title: span ? span.innerText : el.innerText,
-                        active: el.className.includes('bg-sidebar-muted') || el.className.includes('bg-sidebar-secondary') || el.className.includes('bg-muted')
+                        title: cleanTitle,
+                        active: el.className.includes('bg-sidebar-muted') || el.className.includes('bg-sidebar-secondary') || el.className.includes('bg-muted'),
+                        inProgress: hasSpinner
                     };
-                }).filter(x => x.title) : [];
+                }).filter(x => x.title && x.title !== "New Conversation" && x.title !== "Conversation History" && x.title !== "Scheduled Tasks" && !x.title.startsWith("See all")) : [];
 
-                sidebarProjects.push({
-                    project: h.innerText,
-                    chats: chatItems
-                });
+                // Deduplicate sidebarProjects to prevent duplicates
+                if (h.innerText && !sidebarProjects.some(sp => sp.project === h.innerText)) {
+                    sidebarProjects.push({
+                        project: h.innerText,
+                        chats: chatItems
+                    });
+                }
             }
         } catch(e) {}
 
