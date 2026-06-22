@@ -447,9 +447,16 @@ async function main() {
         }
     });
 
-    app.get('/snapshot/:id', (req, res) => {
+    app.get('/snapshot/:id', async (req, res) => {
         const c = cascades.get(req.params.id);
-        if (!c || !c.snapshot) return res.status(404).json({ error: 'Not found' });
+        if (!c) return res.status(404).json({ error: 'Not found' });
+        // Force a live snapshot capture on request to guarantee synced content
+        const snap = await captureHTML(c.cdp);
+        if (snap) {
+            c.snapshot = snap;
+            c.snapshotHash = hashString(snap.html);
+        }
+        if (!c.snapshot) return res.status(404).json({ error: 'Not found' });
         res.json(c.snapshot);
     });
 
