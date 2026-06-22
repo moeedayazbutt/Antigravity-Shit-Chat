@@ -121,7 +121,7 @@ async function extractMetadata(cdp) {
                     const hasSpinner = !!el.querySelector('.animate-spin, svg[class*="spin"], [class*="spinner"]');
                     const text = span ? span.innerText : el.innerText;
                     // Clean title from duration suffixes e.g., "\n5m"
-                    const cleanTitle = text.split('\n')[0].trim();
+                    const cleanTitle = text.split('\\n')[0].trim();
                     
                     return {
                         title: cleanTitle,
