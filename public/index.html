@@ -1,294 +1,665 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Antigravity Shit-Chat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Antigravity Monitor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        /* ── Design tokens matching Antigravity's dark theme ── */
+        :root {
+            --bg:           #141414;
+            --bg-sidebar:   #1a1a1a;
+            --bg-card:      #1e1e1e;
+            --bg-input:     #262626;
+            --bg-hover:     #2a2a2a;
+            --border:       #2e2e2e;
+            --border-focus: #525252;
+
+            --text:         #e5e5e5;
+            --text-muted:   #737373;
+            --text-dim:     #525252;
+
+            --accent:       #3b82f6;
+            --accent-dim:   rgba(59,130,246,0.12);
+            --green:        #22c55e;
+            --green-dim:    rgba(34,197,94,0.12);
+            --red:          #ef4444;
+            --amber:        #f59e0b;
+
+            --radius:       8px;
+            --radius-lg:    12px;
+            --sidebar-w:    240px;
+            --header-h:     48px;
+
+            font-size: 14px;
+            line-height: 1.6;
         }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+        html, body { height: 100%; height: 100dvh; overflow: hidden; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #1a1a1a !important;
-            color: #fff !important;
-            height: 100vh;
-            /* Fallback */
-            height: 100dvh;
-            /* Dynamic constraint */
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            margin: 0 !important;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            -webkit-font-smoothing: antialiased;
         }
 
-        /* Cascade Selector / Header */
-        .headers-container {
-            background: #2a2a2a !important;
-            border-bottom: 1px solid #3a3a3a !important;
-            position: relative;
-            z-index: 100;
-            display: flex;
-            overflow-x: auto;
-            white-space: nowrap;
-            -webkit-overflow-scrolling: touch;
+        /* ── Layout ── */
+        #app { display: flex; height: 100dvh; }
+
+        /* ── Sidebar overlay (mobile) ── */
+        #overlay {
+            display: none;
+            position: fixed; inset: 0; z-index: 40;
+            background: rgba(0,0,0,0.7);
+            opacity: 0; transition: opacity .2s;
+        }
+        #overlay.show { opacity: 1; }
+
+        /* ── Sidebar ── */
+        #sidebar {
+            width: var(--sidebar-w);
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border);
+            display: flex; flex-direction: column;
+            flex-shrink: 0; z-index: 50;
+            transition: transform .25s cubic-bezier(.4,0,.2,1);
         }
 
-        .cascade-tab {
-            padding: 12px 16px;
-            cursor: pointer;
-            border-right: 1px solid #3a3a3a;
-            opacity: 0.6;
-            transition: all 0.2s;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .cascade-tab.active {
-            opacity: 1;
-            background: #333;
-            border-bottom: 2px solid #3b82f6;
-        }
-
-        .cascade-tab .status {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #666;
-        }
-
-        .cascade-tab.active-window .status {
-            background: #4ade80;
-        }
-
-        /* Green if optimized/active window */
-
-        .chat-container {
-            flex: 1;
-            overflow-y: auto;
-            position: relative;
-        }
-
-        .chat-content {
-            padding: 16px;
-            min-height: 100%;
-        }
-
-        .input-section {
-            background: #2a2a2a !important;
+        .sidebar-top {
             padding: 12px;
-            /* Account for mobile safe areas */
-            padding-bottom: calc(12px + env(safe-area-inset-bottom));
-            border-top: 1px solid #3a3a3a !important;
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 10px;
+            height: var(--header-h);
+        }
+
+        .ag-logo {
+            width: 26px; height: 26px; border-radius: 6px;
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 700; color: #fff; letter-spacing: -.5px;
+            flex-shrink: 0;
+        }
+
+        .sidebar-brand { font-size: 13px; font-weight: 600; color: var(--text); }
+        .sidebar-sub   { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+
+        .sidebar-section {
+            padding: 14px 12px 4px;
+            font-size: 10px; font-weight: 600; letter-spacing: .08em;
+            text-transform: uppercase; color: var(--text-dim);
+        }
+
+        #sessionList { flex: 1; overflow-y: auto; padding: 4px 6px; }
+
+        .session-item {
+            display: flex; align-items: center; gap: 9px;
+            padding: 8px 8px; border-radius: var(--radius);
+            cursor: pointer; color: var(--text-muted);
+            font-size: 13px; font-weight: 400;
+            transition: background .12s, color .12s;
+            position: relative; margin-bottom: 1px;
+        }
+        .session-item:hover { background: var(--bg-hover); color: var(--text); }
+        .session-item.active { background: var(--accent-dim); color: var(--text); }
+        .session-item.active::before {
+            content: ''; position: absolute; left: 0; top: 25%; bottom: 25%;
+            width: 2px; background: var(--accent); border-radius: 0 2px 2px 0;
+        }
+
+        .session-dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: var(--text-dim); flex-shrink: 0; transition: background .2s;
+        }
+        .session-item.live .session-dot {
+            background: var(--green);
+            box-shadow: 0 0 0 3px var(--green-dim);
+        }
+        .session-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        .no-sessions {
+            padding: 20px 12px; text-align: center;
+            color: var(--text-dim); font-size: 12px; line-height: 1.8;
+        }
+        .no-sessions-icon { font-size: 24px; display: block; margin-bottom: 8px; }
+
+        .sidebar-bottom {
+            padding: 10px 12px;
+            border-top: 1px solid var(--border);
+            display: flex; align-items: center; gap: 8px;
+        }
+        .conn-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); }
+        .conn-dot.ok { background: var(--green); }
+        .conn-dot.wait { background: var(--amber); animation: blink 1s ease infinite; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+        .conn-label { font-size: 11px; color: var(--text-muted); }
+
+        /* ── Main panel ── */
+        #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+        /* ── Header ── */
+        #header {
+            height: var(--header-h);
+            background: var(--bg);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 10px; padding: 0 14px;
+            flex-shrink: 0;
+        }
+
+        #menuBtn {
+            width: 32px; height: 32px; border-radius: var(--radius);
+            border: 1px solid var(--border); background: transparent;
+            color: var(--text-muted); cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all .15s; flex-shrink: 0;
+        }
+        #menuBtn:hover { background: var(--bg-hover); color: var(--text); border-color: var(--border-focus); }
+
+        .header-title {
+            flex: 1; min-width: 0;
+            font-size: 13px; font-weight: 500; color: var(--text);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .header-crumb { color: var(--text-muted); font-weight: 400; }
+
+        .live-pill {
+            display: none; align-items: center; gap: 5px;
+            background: var(--green-dim); border: 1px solid rgba(34,197,94,.2);
+            border-radius: 20px; padding: 3px 9px;
+            font-size: 11px; font-weight: 500; color: var(--green);
+            flex-shrink: 0;
+        }
+        .live-pill.show { display: flex; }
+        .live-pill-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+
+        /* ── Chat scroller ── */
+        #chatScroller {
+            flex: 1; overflow-y: auto; overflow-x: hidden;
             position: relative;
-            z-index: 1000;
-            /* Increased z-index */
-            display: flex;
-            gap: 8px;
+        }
+        #chatScroller::-webkit-scrollbar { width: 3px; }
+        #chatScroller::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        #chatContent { min-height: 100%; }
+
+        /* Empty / loading */
+        .state-wrap {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 300px; height: 100%; gap: 10px;
+            color: var(--text-dim); padding: 32px;
+        }
+        .state-icon { font-size: 32px; margin-bottom: 4px; }
+        .state-title { font-size: 14px; font-weight: 500; color: var(--text-muted); }
+        .state-body { font-size: 12px; color: var(--text-dim); text-align: center; max-width: 260px; line-height: 1.7; }
+
+        /* ── MIRRORED CONTENT OVERRIDES ──
+           Force every text node inside the mirror to be legible.
+           The .dark class is on #ag-mirror so Tailwind dark vars should work,
+           but we add explicit fallbacks for robustness. */
+        #ag-mirror {
+            color: var(--text) !important;
+            background: transparent !important;
+            font-family: 'Inter', sans-serif !important;
+        }
+        /* Force ALL text inside to be light */
+        #ag-mirror * { color: inherit; }
+        #ag-mirror p, #ag-mirror li, #ag-mirror td, #ag-mirror th,
+        #ag-mirror span, #ag-mirror div { color: var(--text) !important; }
+        /* Muted / timestamp text */
+        #ag-mirror [class*="text-muted"],
+        #ag-mirror [class*="text-gray"],
+        #ag-mirror [class*="text-neutral"] { color: var(--text-muted) !important; }
+        /* Code */
+        #ag-mirror pre, #ag-mirror code {
+            background: #1e1e1e !important; color: #d4d4d4 !important;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+            font-size: 12px !important; border-radius: 6px !important;
+        }
+        /* Links */
+        #ag-mirror a { color: #60a5fa !important; text-decoration: none; }
+        #ag-mirror a:hover { text-decoration: underline; }
+        /* Override any fixed heights that break layout */
+        #ag-mirror > div { height: auto !important; min-height: 0 !important; }
+        /* Scroll bars inside */
+        #ag-mirror *::-webkit-scrollbar { width: 3px; height: 3px; }
+        #ag-mirror *::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        /* Green/red diff lines keep their colors */
+        #ag-mirror [class*="text-green"], #ag-mirror .text-green-500 { color: var(--green) !important; }
+        #ag-mirror [class*="text-red"]   { color: var(--red) !important; }
+
+        /* ── Input bar ── */
+        #inputBar {
+            background: var(--bg);
+            border-top: 1px solid var(--border);
+            padding: 10px 12px;
+            padding-bottom: calc(10px + env(safe-area-inset-bottom));
+            flex-shrink: 0;
         }
 
-        textarea {
-            flex: 1;
-            background: #1a1a1a;
-            border: 1px solid #3a3a3a;
-            color: white;
-            padding: 8px;
-            border-radius: 6px;
-            resize: none;
-            height: 40px;
+        /* File previews strip */
+        #filePreviews {
+            display: none;
+            flex-wrap: wrap; gap: 6px;
+            padding: 0 0 8px;
+        }
+        #filePreviews.show { display: flex; }
+
+        .file-chip {
+            display: flex; align-items: center; gap: 6px;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 4px 8px;
+            font-size: 12px; color: var(--text-muted);
+            max-width: 160px;
+        }
+        .file-chip img {
+            width: 28px; height: 28px; border-radius: 4px; object-fit: cover;
+        }
+        .file-chip-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .file-chip-rm {
+            width: 16px; height: 16px; border-radius: 50%;
+            background: var(--bg-hover); border: none; cursor: pointer;
+            color: var(--text-muted); font-size: 10px; line-height: 1;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; transition: background .1s;
+        }
+        .file-chip-rm:hover { background: var(--red); color: #fff; }
+
+        /* Input row */
+        .input-row {
+            display: flex; align-items: flex-end; gap: 6px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 8px 8px 8px 12px;
+            transition: border-color .15s, box-shadow .15s;
+        }
+        .input-row:focus-within {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 3px rgba(59,130,246,.08);
         }
 
-        button {
-            padding: 0 20px;
-            background: #3b82f6;
-            border: none;
-            color: white;
-            border-radius: 6px;
-            font-weight: 600;
+        /* Attach button */
+        #attachBtn {
+            width: 32px; height: 32px; border-radius: var(--radius);
+            border: none; background: transparent;
+            color: var(--text-muted); cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; transition: color .15s, background .15s;
+        }
+        #attachBtn:hover { color: var(--text); background: var(--bg-hover); }
+        #fileInput { display: none; }
+
+        #msgInput {
+            flex: 1; background: transparent; border: none; outline: none;
+            color: var(--text);
+            font-family: 'Inter', sans-serif; font-size: 14px; line-height: 1.5;
+            resize: none; min-height: 22px; max-height: 160px; overflow-y: auto;
+            caret-color: var(--accent);
+            padding: 5px 0;
+        }
+        #msgInput::placeholder { color: var(--text-dim); }
+
+        #sendBtn {
+            width: 32px; height: 32px; border-radius: var(--radius);
+            border: none; background: var(--accent);
+            color: #fff; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; opacity: .35;
+            transition: opacity .15s, background .15s, transform .1s;
+        }
+        #sendBtn.ready { opacity: 1; }
+        #sendBtn.ready:active { transform: scale(.9); }
+
+        /* ── Mobile ── */
+        @media (max-width: 720px) {
+            #sidebar {
+                position: fixed; top: 0; left: 0; bottom: 0;
+                transform: translateX(-100%);
+                box-shadow: none;
+            }
+            #sidebar.open {
+                transform: translateX(0);
+                box-shadow: 12px 0 40px rgba(0,0,0,.6);
+            }
+            #overlay { display: block; }
         }
 
-        .loading {
-            text-align: center;
-            color: #666;
-            margin-top: 50px;
+        /* ── Desktop: hide menu button ── */
+        @media (min-width: 721px) {
+            #menuBtn { display: none; }
         }
     </style>
-    <style id="cascade-style">
-        /* Dynamic styles will be injected here */
-    </style>
+    <!-- Antigravity captured styles injected here -->
+    <style id="cascade-style"></style>
 </head>
-
 <body>
+<div id="app">
 
-    <div class="headers-container" id="tabsContainer">
-        <!-- Tabs injected here -->
-        <div class="cascade-tab">Loading...</div>
-    </div>
+    <div id="overlay"></div>
 
-    <div class="chat-container" id="chatContainer">
-        <div class="chat-content" id="chatContent">
-            <div class="loading">Waiting for connection...</div>
+    <!-- ── Sidebar ── -->
+    <aside id="sidebar">
+        <div class="sidebar-top">
+            <div class="ag-logo">AG</div>
+            <div>
+                <div class="sidebar-brand">Antigravity</div>
+                <div class="sidebar-sub">Chat Monitor</div>
+            </div>
         </div>
-    </div>
 
-    <div class="input-section">
-        <textarea id="messageInput" placeholder="Type a message..."></textarea>
-        <button id="sendBtn">Send</button>
-    </div>
+        <div class="sidebar-section">Active Sessions</div>
 
-    <script>
-        const tabsContainer = document.getElementById('tabsContainer');
-        const chatContent = document.getElementById('chatContent');
-        const chatContainer = document.getElementById('chatContainer');
+        <div id="sessionList">
+            <div class="no-sessions">
+                <span class="no-sessions-icon">💬</span>
+                Scanning for sessions...
+            </div>
+        </div>
 
-        let cascades = [];
-        let currentCascadeId = null;
-        let ws = null;
+        <div class="sidebar-bottom">
+            <div class="conn-dot wait" id="connDot"></div>
+            <span class="conn-label" id="connLabel">Connecting…</span>
+        </div>
+    </aside>
 
-        function connect() {
-            ws = new WebSocket(`ws://${location.host}`);
+    <!-- ── Main ── -->
+    <main id="main">
 
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
+        <div id="header">
+            <button id="menuBtn" aria-label="Toggle sidebar">
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+                    <path d="M1.5 3h12M1.5 7.5h12M1.5 12h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
+            </button>
+            <div class="header-title">
+                <span class="header-crumb" id="headerCrumb"></span>
+                <span id="headerTitle">No session selected</span>
+            </div>
+            <div class="live-pill" id="livePill">
+                <div class="live-pill-dot"></div> Live
+            </div>
+        </div>
 
-                if (data.type === 'cascade_list') {
-                    cascades = data.cascades;
-                    renderTabs();
-
-                    // Auto-select first if none selected
-                    if (!currentCascadeId && cascades.length > 0) {
-                        selectCascade(cascades[0].id);
-                    }
-                }
-
-                if (data.type === 'snapshot_update') {
-                    if (data.cascadeId === currentCascadeId) {
-                        updateContentOnly(currentCascadeId);
-                    }
-                }
-            };
-
-            ws.onclose = () => setTimeout(connect, 2000);
-        }
-
-        function renderTabs() {
-            tabsContainer.innerHTML = cascades.map(c => `
-                <div class="cascade-tab ${c.id === currentCascadeId ? 'active' : ''} ${c.active ? 'active-window' : ''}" 
-                     onclick="selectCascade('${c.id}')">
-                    <div class="status"></div>
-                    ${c.title || 'Untitled'}
+        <div id="chatScroller">
+            <div id="chatContent">
+                <div class="state-wrap" id="emptyState">
+                    <div class="state-icon">🖥️</div>
+                    <div class="state-title">Waiting for a session</div>
+                    <div class="state-body">Open Antigravity in Chrome with remote debugging enabled to start mirroring a conversation.</div>
                 </div>
-            `).join('');
+            </div>
+        </div>
 
-            if (cascades.length === 0) {
-                tabsContainer.innerHTML = '<div class="cascade-tab">No chats found</div>';
-            }
-        }
+        <div id="inputBar">
+            <!-- File preview chips -->
+            <div id="filePreviews"></div>
 
-        function selectCascade(id) {
-            currentCascadeId = id;
-            renderTabs();
-            loadCascade(id);
-        }
+            <!-- Input row -->
+            <div class="input-row">
+                <button id="attachBtn" title="Attach files">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M13.5 7.5l-5.5 5.5a4 4 0 01-5.657-5.657l6-6a2.5 2.5 0 013.535 3.535l-5.5 5.5a1 1 0 01-1.414-1.414l5-5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+                <input type="file" id="fileInput" multiple accept="image/*,.pdf,.txt,.md,.json,.csv">
+                <textarea id="msgInput" placeholder="Send a message…" rows="1"></textarea>
+                <button id="sendBtn" aria-label="Send">
+                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+                        <path d="M1 7.5h13M8.5 2l5.5 5.5L8.5 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </main>
+</div>
 
-        async function loadCascade(id) {
-            try {
-                // 1. Fetch Styles (Once)
-                const styleRes = await fetch(`/styles/${id}`);
-                if (styleRes.ok) {
-                    const styleData = await styleRes.json();
-                    document.getElementById('cascade-style').textContent = `
-                        ${styleData.css}
-                        #cascade { 
-                            background: transparent !important; 
-                            color: white !important; 
-                        }
-                        #cascade .prose {
-                            --tw-prose-body: #e5e7eb !important;
-                            --tw-prose-headings: #f3f4f6 !important;
-                            --tw-prose-lead: #e5e7eb !important;
-                            --tw-prose-links: #60a5fa !important;
-                            --tw-prose-bold: #f3f4f6 !important;
-                            --tw-prose-counters: #9ca3af !important;
-                            --tw-prose-bullets: #d1d5db !important;
-                            --tw-prose-hr: #374151 !important;
-                            --tw-prose-quotes: #f3f4f6 !important;
-                            --tw-prose-quote-borders: #374151 !important;
-                            --tw-prose-captions: #9ca3af !important;
-                            --tw-prose-code: #f3f4f6 !important;
-                            --tw-prose-pre-code: #e5e7eb !important;
-                            --tw-prose-pre-bg: #1f2937 !important;
-                            --tw-prose-th-borders: #374151 !important;
-                            --tw-prose-td-borders: #374151 !important;
-                            color: #e5e7eb !important; /* Force color explicitly too */
-                        }
-                        /* Ensure code blocks are readable */
-                        pre, code { background: #111 !important; color: #ddd !important; }
-                    `;
-                }
+<script>
+    let sessions = [], currentId = null, ws = null, cssLoaded = new Set();
+    let pendingFiles = []; // { file, dataUrl }
 
-                // 2. Fetch Content
-                await updateContentOnly(id);
-            } catch (e) { console.error(e); }
-        }
+    const sidebar      = document.getElementById('sidebar');
+    const overlay      = document.getElementById('overlay');
+    const menuBtn      = document.getElementById('menuBtn');
+    const sessionList  = document.getElementById('sessionList');
+    const chatScroller = document.getElementById('chatScroller');
+    const chatContent  = document.getElementById('chatContent');
+    const emptyState   = document.getElementById('emptyState');
+    const headerCrumb  = document.getElementById('headerCrumb');
+    const headerTitle  = document.getElementById('headerTitle');
+    const livePill     = document.getElementById('livePill');
+    const connDot      = document.getElementById('connDot');
+    const connLabel    = document.getElementById('connLabel');
+    const msgInput     = document.getElementById('msgInput');
+    const sendBtn      = document.getElementById('sendBtn');
+    const attachBtn    = document.getElementById('attachBtn');
+    const fileInput    = document.getElementById('fileInput');
+    const filePreviews = document.getElementById('filePreviews');
 
-        async function updateContentOnly(id) {
-            try {
-                const res = await fetch(`/snapshot/${id}`);
-                if (!res.ok) throw new Error('Failed');
-                const data = await res.json();
+    // ── Sidebar toggle ──────────────────────────────
+    function openSidebar()  { sidebar.classList.add('open'); overlay.classList.add('show'); }
+    function closeSidebar() { sidebar.classList.remove('open'); overlay.classList.remove('show'); }
+    menuBtn.addEventListener('click', () => sidebar.classList.contains('open') ? closeSidebar() : openSidebar());
+    overlay.addEventListener('click', closeSidebar);
 
-                // Preserve Scroll
-                const isAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 50;
+    // ── Auto-grow textarea ──────────────────────────
+    msgInput.addEventListener('input', () => {
+        msgInput.style.height = 'auto';
+        msgInput.style.height = Math.min(msgInput.scrollHeight, 160) + 'px';
+        updateSendBtn();
+    });
 
-                document.body.style.backgroundColor = data.bodyBg || '#1a1a1a';
-                chatContent.innerHTML = data.html;
-                // No inner style block needed anymore
+    function updateSendBtn() {
+        const hasText = msgInput.value.trim().length > 0;
+        const hasFiles = pendingFiles.length > 0;
+        sendBtn.classList.toggle('ready', hasText || hasFiles);
+    }
 
-                if (isAtBottom) chatContainer.scrollTop = chatContainer.scrollHeight;
-            } catch (e) { }
-        }
+    // ── File attachment ─────────────────────────────
+    attachBtn.addEventListener('click', () => fileInput.click());
 
-        async function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const text = input.value;
-            if (!text || !currentCascadeId) return;
-
-            // Clear immediately to feel responsive
-            input.value = '';
-
-            try {
-                await fetch(`/send/${currentCascadeId}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text })
-                });
-                updateContentOnly(currentCascadeId); // Immediate refresh try
-            } catch (e) {
-                console.error("Send failed", e);
-                input.value = text; // Restore on fail
-                alert("Failed to send message: " + e.message);
-            }
-        }
-
-        document.getElementById('sendBtn').onclick = sendMessage;
-
-        document.getElementById('messageInput').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
+    fileInput.addEventListener('change', () => {
+        const files = Array.from(fileInput.files);
+        files.forEach(f => {
+            const reader = new FileReader();
+            reader.onload = e => {
+                pendingFiles.push({ file: f, dataUrl: e.target.result });
+                renderFilePreviews();
+                updateSendBtn();
+            };
+            reader.readAsDataURL(f);
         });
+        fileInput.value = ''; // reset so same file can be picked again
+    });
 
-        connect();
-    </script>
+    function renderFilePreviews() {
+        if (pendingFiles.length === 0) {
+            filePreviews.classList.remove('show');
+            filePreviews.innerHTML = '';
+            return;
+        }
+        filePreviews.classList.add('show');
+        filePreviews.innerHTML = pendingFiles.map((pf, i) => `
+            <div class="file-chip">
+                ${pf.file.type.startsWith('image/') ? `<img src="${pf.dataUrl}" alt="">` : `<span style="font-size:18px">📄</span>`}
+                <span class="file-chip-name">${esc(pf.file.name)}</span>
+                <button class="file-chip-rm" onclick="removeFile(${i})" title="Remove">✕</button>
+            </div>
+        `).join('');
+    }
+
+    function removeFile(i) {
+        pendingFiles.splice(i, 1);
+        renderFilePreviews();
+        updateSendBtn();
+    }
+
+    // ── WebSocket ───────────────────────────────────
+    function connect() {
+        setConn('wait', 'Connecting…');
+        ws = new WebSocket(`ws://${location.host}`);
+        ws.onopen  = () => setConn('ok', 'Connected');
+        ws.onclose = () => { setConn('wait', 'Reconnecting…'); setTimeout(connect, 2000); };
+        ws.onerror = () => ws.close();
+        ws.onmessage = ({ data }) => {
+            const msg = JSON.parse(data);
+            if (msg.type === 'cascade_list') {
+                sessions = msg.cascades;
+                renderSidebar();
+                if (!currentId && sessions.length > 0) pick(sessions[0].id);
+            }
+            if (msg.type === 'snapshot_update' && msg.cascadeId === currentId) {
+                refreshContent(currentId);
+            }
+        };
+    }
+
+    function setConn(state, label) {
+        connDot.className = 'conn-dot ' + state;
+        connLabel.textContent = label;
+    }
+
+    // ── Sidebar ─────────────────────────────────────
+    function renderSidebar() {
+        if (!sessions.length) {
+            sessionList.innerHTML = `<div class="no-sessions"><span class="no-sessions-icon">💬</span>No sessions found.<br>Open Antigravity in Chrome<br>with <code style="font-size:10px;color:#525252">--remote-debugging-port=9000</code></div>`;
+            return;
+        }
+        sessionList.innerHTML = sessions.map(s => `
+            <div class="session-item ${s.id === currentId ? 'active' : ''} ${s.active ? 'live' : ''}"
+                 onclick="pick('${s.id}')">
+                <div class="session-dot"></div>
+                <span class="session-name">${esc(s.title || 'Untitled')}</span>
+            </div>
+        `).join('');
+    }
+
+    // ── Pick session ────────────────────────────────
+    function pick(id) {
+        currentId = id;
+        closeSidebar();
+        renderSidebar();
+        const s = sessions.find(x => x.id === id);
+        headerCrumb.textContent = s ? (s.window ? s.window.split(' ')[0] + ' / ' : '') : '';
+        headerTitle.textContent = s?.title || 'Session';
+        livePill.classList.toggle('show', !!s?.active);
+        loadSession(id);
+    }
+
+    // ── Load CSS + content ──────────────────────────
+    async function loadSession(id) {
+        chatContent.innerHTML = `<div class="state-wrap"><div class="state-icon" style="animation:spin 1s linear infinite;display:inline-block">⏳</div><div class="state-title">Loading…</div></div>`;
+
+        if (!cssLoaded.has(id)) {
+            try {
+                const r = await fetch(`/styles/${id}`);
+                if (r.ok) { const { css } = await r.json(); applyMirrorCss(css); cssLoaded.add(id); }
+            } catch(e) {}
+        }
+        await refreshContent(id);
+    }
+
+    function applyMirrorCss(css) {
+        // Scope the captured CSS so it only affects #ag-mirror, preventing leakage into our UI
+        const scoped = css.replace(/(^|\})\s*(body|html)(\s*[\{,])/gm, '$1 #ag-mirror$3');
+        document.getElementById('cascade-style').textContent = scoped + `
+            /* ── Force dark text everywhere inside the mirror ── */
+            #ag-mirror, #ag-mirror * {
+                color: #e5e5e5 !important;
+            }
+            #ag-mirror {
+                background: transparent !important;
+                font-family: 'Inter', -apple-system, sans-serif !important;
+            }
+            /* Muted text */
+            #ag-mirror [class*="text-muted"],
+            #ag-mirror [class*="text-gray-4"],
+            #ag-mirror [class*="text-gray-5"],
+            #ag-mirror [class*="text-neutral-4"],
+            #ag-mirror [class*="text-neutral-5"] { color: #737373 !important; }
+            /* Links */
+            #ag-mirror a { color: #60a5fa !important; }
+            /* Code */
+            #ag-mirror pre, #ag-mirror code {
+                background: #1e1e1e !important;
+                color: #d4d4d4 !important;
+                font-family: 'JetBrains Mono', monospace !important;
+                font-size: 12px !important;
+                border-radius: 6px !important;
+            }
+            /* Diffs: keep green/red */
+            #ag-mirror [class*="text-green"] { color: #22c55e !important; }
+            #ag-mirror [class*="text-red"]   { color: #ef4444 !important; }
+            /* Borders */
+            #ag-mirror [class*="border"] { border-color: #2e2e2e !important; }
+            /* Fix layout heights */
+            #ag-mirror > div { height: auto !important; min-height: 0 !important; overflow: visible !important; }
+            /* Scrollbars */
+            #ag-mirror *::-webkit-scrollbar { width: 3px; height: 3px; }
+            #ag-mirror *::-webkit-scrollbar-thumb { background: #2e2e2e; border-radius: 3px; }
+        `;
+    }
+
+    // ── Refresh snapshot ────────────────────────────
+    async function refreshContent(id) {
+        if (id !== currentId) return;
+        try {
+            const r = await fetch(`/snapshot/${id}`);
+            if (!r.ok) return;
+            const { html } = await r.json();
+            if (!html) return;
+
+            const atBottom = chatScroller.scrollHeight - chatScroller.scrollTop - chatScroller.clientHeight < 100;
+            chatContent.innerHTML = html;
+            if (atBottom) requestAnimationFrame(() => chatScroller.scrollTop = chatScroller.scrollHeight);
+        } catch(e) {}
+    }
+
+    // ── Send ────────────────────────────────────────
+    async function send() {
+        const text = msgInput.value.trim();
+        if (!text && pendingFiles.length === 0) return;
+        if (!currentId) return;
+
+        // Build message — for now append file names as context since CDP injection is text-only
+        let fullMsg = text;
+        if (pendingFiles.length > 0) {
+            const names = pendingFiles.map(pf => pf.file.name).join(', ');
+            fullMsg = (text ? text + '\n' : '') + `[Attached: ${names}]`;
+        }
+
+        msgInput.value = '';
+        msgInput.style.height = 'auto';
+        pendingFiles = [];
+        renderFilePreviews();
+        updateSendBtn();
+
+        try {
+            await fetch(`/send/${currentId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: fullMsg })
+            });
+            setTimeout(() => refreshContent(currentId), 400);
+        } catch(e) {
+            msgInput.value = text;
+            updateSendBtn();
+        }
+    }
+
+    sendBtn.addEventListener('click', send);
+    msgInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    });
+
+    function esc(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    connect();
+</script>
 </body>
-
 </html>

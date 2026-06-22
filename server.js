@@ -93,22 +93,18 @@ async function connectCDP(url) {
 
 async function extractMetadata(cdp) {
     const SCRIPT = `(() => {
-        const cascade = document.getElementById('cascade');
-        if (!cascade) return { found: false };
-        
-        let chatTitle = null;
-        const possibleTitleSelectors = ['h1', 'h2', 'header', '[class*="title"]'];
-        for (const sel of possibleTitleSelectors) {
-            const el = document.querySelector(sel);
-            if (el && el.textContent.length > 2 && el.textContent.length < 50) {
-                chatTitle = el.textContent.trim();
-                break;
-            }
-        }
-        
+        // Support both old #cascade and new Antigravity #root structure
+        const root = document.getElementById('cascade') || document.getElementById('root');
+        if (!root) return { found: false };
+
+        // Try to get the conversation title from the page title or header
+        let chatTitle = document.title || 'Agent';
+        // Strip common suffixes
+        chatTitle = chatTitle.replace(/\\s*[-|]\\s*Antigravity.*$/i, '').trim() || 'Agent';
+
         return {
             found: true,
-            chatTitle: chatTitle || 'Agent',
+            chatTitle: chatTitle,
             isActive: document.hasFocus()
         };
     })()`;
@@ -130,21 +126,28 @@ async function extractMetadata(cdp) {
             }
         } catch (e) { }
     }
+
+    // Fallback: if we have any context, just use the page title
+    const fallbackCtx = cdp.contexts[0];
+    if (fallbackCtx) {
+        try {
+            const res = await cdp.call("Runtime.evaluate", { expression: '({found:true, chatTitle: document.title || "Agent", isActive: document.hasFocus()})', returnByValue: true, contextId: fallbackCtx.id });
+            if (res.result?.value) return { ...res.result.value, contextId: fallbackCtx.id };
+        } catch(e) {}
+    }
     return null;
 }
 
 async function captureCSS(cdp) {
     const SCRIPT = `(() => {
-        // Gather CSS and namespace it basic way to prevent leaks
         let css = '';
         for (const sheet of document.styleSheets) {
             try { 
                 for (const rule of sheet.cssRules) {
                     let text = rule.cssText;
-                    // Naive scoping: replace body/html with #cascade locator
-                    // This prevents the monitored app's global backgrounds from overriding our monitor's body
-                    text = text.replace(/(^|[\\s,}])body(?=[\\s,{])/gi, '$1#cascade');
-                    text = text.replace(/(^|[\\s,}])html(?=[\\s,{])/gi, '$1#cascade');
+                    // Scope body/html rules to avoid polluting the monitor UI
+                    text = text.replace(/(^|[\\s,}])body(?=[\\s,{])/gi, '$1#ag-mirror');
+                    text = text.replace(/(^|[\\s,}])html(?=[\\s,{])/gi, '$1#ag-mirror');
                     css += text + '\\n'; 
                 }
             } catch (e) { }
@@ -152,8 +155,8 @@ async function captureCSS(cdp) {
         return { css };
     })()`;
 
-    const contextId = cdp.rootContextId;
-    if (!contextId) return null;
+    const contextId = cdp.rootContextId || (cdp.contexts[0]?.id);
+    if (!contextId) return '';
 
     try {
         const result = await cdp.call("Runtime.evaluate", {
@@ -167,24 +170,52 @@ async function captureCSS(cdp) {
 
 async function captureHTML(cdp) {
     const SCRIPT = `(() => {
+        // Old #cascade style support
         const cascade = document.getElementById('cascade');
-        if (!cascade) return { error: 'cascade not found' };
-        
-        const clone = cascade.cloneNode(true);
-        // Remove input box to keep snapshot clean
-        const input = clone.querySelector('[contenteditable="true"]')?.closest('div[id^="cascade"] > div');
-        if (input) input.remove();
-        
-        const bodyStyles = window.getComputedStyle(document.body);
+        if (cascade) {
+            const clone = cascade.cloneNode(true);
+            clone.querySelectorAll('[contenteditable="true"]').forEach(el => el.closest('div')?.remove());
+            clone.id = 'ag-mirror';
+            const bg = window.getComputedStyle(document.body);
+            return { html: clone.outerHTML, bodyBg: bg.backgroundColor, bodyColor: bg.color };
+        }
 
+        // New Antigravity: find the scrollable chat messages container
+        // It's the div with scrollbar-hide that has the most text content
+        const chatEl = Array.from(document.querySelectorAll('div')).filter(d => {
+            const s = window.getComputedStyle(d);
+            return (s.overflowY === 'auto' || s.overflowY === 'scroll')
+                && d.scrollHeight > 500
+                && (d.scrollHeight / Math.max(d.clientHeight, 1)) > 1.1;
+        }).sort((a, b) => (b.innerText?.length || 0) - (a.innerText?.length || 0))[0];
+
+        if (!chatEl) return { error: 'chat element not found' };
+
+        const clone = chatEl.cloneNode(true);
+        // Remove any lingering input areas
+        clone.querySelectorAll('[contenteditable="true"]').forEach(el => {
+            const p = el.parentElement; if (p) p.remove();
+        });
+        clone.querySelectorAll('[id*="InputBox"],[id*="inputBox"]').forEach(el => {
+            const p = el.closest('div[class*="flex-shrink"]') || el.parentElement;
+            if (p) p.remove();
+        });
+
+        // Wrap with 'dark' class so Tailwind dark-mode CSS vars activate
+        const wrapper = document.createElement('div');
+        wrapper.id = 'ag-mirror';
+        wrapper.className = 'dark';
+        wrapper.appendChild(clone);
+
+        const bg = window.getComputedStyle(document.body);
         return {
-            html: clone.outerHTML,
-            bodyBg: bodyStyles.backgroundColor,
-            bodyColor: bodyStyles.color
+            html: wrapper.outerHTML,
+            bodyBg: bg.backgroundColor,
+            bodyColor: bg.color
         };
     })()`;
 
-    const contextId = cdp.rootContextId;
+    const contextId = cdp.rootContextId || (cdp.contexts[0]?.id);
     if (!contextId) return null;
 
     try {
@@ -207,7 +238,12 @@ async function discover() {
     const allTargets = [];
     await Promise.all(PORTS.map(async (port) => {
         const list = await getJson(`http://127.0.0.1:${port}/json/list`);
-        const workbenches = list.filter(t => t.url?.includes('workbench.html') || t.title?.includes('workbench'));
+        const workbenches = list.filter(t => 
+            t.url?.includes('workbench.html') || 
+            t.title?.includes('workbench') ||
+            (t.url?.includes('127.0.0.1') && t.url?.includes('/c/') && t.type === 'page') ||
+            (t.url?.includes('localhost') && t.url?.includes('/c/') && t.type === 'page')
+        );
         workbenches.forEach(t => allTargets.push({ ...t, port }));
     }));
 
